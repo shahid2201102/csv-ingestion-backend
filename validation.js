@@ -25,7 +25,7 @@ function isValidDate(dateStr) {
 function isValidStoreId(storeId) {
   if (!storeId) return false;
   storeId = storeId.trim();
-  return /^STR-\d{4}$/.test(storeId);
+  return /^STR-\d{4,7}$/.test(storeId);
 }
 
 function validateMappingRow(row, rowNumber) {

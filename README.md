@@ -144,17 +144,17 @@ All endpoints accept a file upload with key 'file' and return JSON with success/
 
 Upload stores CSV:
 ```
-curl -X POST -F "file=@stores_master.csv" http://localhost:3000/api/upload/stores
+curl.exe -X POST -F "file=@stores_master.csv" http://localhost:3000/upload/stores
 ```
 
 Upload users CSV:
 ```
-curl -X POST -F "file=@users_master.csv" http://localhost:3000/api/upload/users
+curl.exe -X POST -F "file=@users_master.csv" http://localhost:3000/upload/users
 ```
 
 Upload mapping CSV:
 ```
-curl -X POST -F "file=@store_user_mapping.csv" http://localhost:3000/api/upload/store-mapping
+curl.exe -X POST -F "file=@store_user_mapping.csv" http://localhost:3000/upload/store-mapping
 ```
 
 ## CSV Formats

@@ -3,16 +3,38 @@ const fs = require('fs');
 const { query } = require('./db');
 const { isValidEmail, isValidUserType, isValidLatitude, isValidLongitude, isValidDate, validateMappingRow, isValidStoreId } = require('./validation');
 
-const BATCH_SIZE = 1000;
+const cache = {
+  brands: new Map(),
+  types: new Map(),
+  cities: new Map(),
+  states: new Map(),
+  countries: new Map(),
+  regions: new Map()
+};
 
-async function getOrCreateLookup(table, name) {
-  const normalizedName = name.trim().toLowerCase();
-  let rows = await query(`SELECT id FROM ${table} WHERE name = ?`, [normalizedName]);
-  if (rows.length > 0) {
-    return rows[0].id;
+const BATCH_SIZE = 2000;
+
+async function getOrCreateLookup(table, name, cacheMap) {
+  if (!name) return null;
+
+  const key = name.trim().toLowerCase();
+
+  if (cacheMap.has(key)) {
+    return cacheMap.get(key);
   }
-  const result = await query(`INSERT INTO ${table} (name) VALUES (?)`, [normalizedName]);
-  return result.insertId;
+
+  let rows = await query(`SELECT id FROM ${table} WHERE name = ?`, [key]);
+
+  let id;
+  if (rows.length > 0) {
+    id = rows[0].id;
+  } else {
+    const result = await query(`INSERT INTO ${table} (name) VALUES (?)`, [key]);
+    id = result.insertId;
+  }
+
+  cacheMap.set(key, id);
+  return id;
 }
 
 async function processStoresCSV(filePath) {
@@ -39,7 +61,7 @@ async function processStoresCSV(filePath) {
             return validateStoreRow(data, rowNumber).length === 0;
           }).map(({ data }) => data);
           const successCount = await batchInsertStores(validRows);
-          resolve({ successRows: successCount, failedRows: errors.length, errors });
+          resolve({ successRows: successCount, failedRows: errors.length, errors: errors.slice(0, 10) });
         } catch (err) {
           reject(err);
         }
@@ -79,12 +101,12 @@ async function batchInsertStores(rows) {
     const placeholders = [];
 
     for (const row of batch) {
-      const storeBrandId = row.store_brand ? await getOrCreateLookup('store_brands', row.store_brand) : null;
-      const storeTypeId = row.store_type ? await getOrCreateLookup('store_types', row.store_type) : null;
-      const cityId = row.city ? await getOrCreateLookup('cities', row.city) : null;
-      const stateId = row.state ? await getOrCreateLookup('states', row.state) : null;
-      const countryId = row.country ? await getOrCreateLookup('countries', row.country) : null;
-      const regionId = row.region ? await getOrCreateLookup('regions', row.region) : null;
+      const storeBrandId = row.store_brand ? await getOrCreateLookup('store_brands', row.store_brand, cache.brands) : null;
+      const storeTypeId = row.store_type ? await getOrCreateLookup('store_types', row.store_type, cache.types) : null;
+      const cityId = row.city ? await getOrCreateLookup('cities', row.city, cache.cities) : null;
+      const stateId = row.state ? await getOrCreateLookup('states', row.state, cache.states) : null;
+      const countryId = row.country ? await getOrCreateLookup('countries', row.country, cache.countries) : null;
+      const regionId = row.region ? await getOrCreateLookup('regions', row.region, cache.regions) : null;
 
       values.push(
         row.store_id,
@@ -135,7 +157,7 @@ async function processUsersCSV(filePath) {
             return validateUserRow(data, rowNumber).length === 0;
           }).map(({ data }) => data);
           const successCount = await batchInsertUsers(validRows);
-          resolve({ successRows: successCount, failedRows: errors.length, errors });
+          resolve({ successRows: successCount, failedRows: errors.length, errors: errors.slice(0, 10) });
         } catch (err) {
           reject(err);
         }
@@ -219,7 +241,7 @@ async function processMappingCSV(filePath) {
             }
           }
           const successCount = await batchInsertMappings(validRows);
-          resolve({ successRows: successCount, failedRows: errors.length, errors });
+          resolve({ successRows: successCount, failedRows: errors.length, errors: errors.slice(0, 10) });
         } catch (err) {
           reject(err);
         }
