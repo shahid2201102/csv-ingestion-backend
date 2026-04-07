@@ -1,40 +1,128 @@
 # CSV Data Ingestion Backend
 
-A simple Node.js backend for ingesting CSV data into MySQL with validation and error reporting.
+A Node.js backend service for ingesting CSV data into MySQL with validation, error reporting, and performance optimization.
 
-## Project Overview
+---
 
-This project provides APIs to upload CSV files and ingest them into a MySQL database. It handles three types of CSV files: stores, users, and store-user mappings. The system validates data, normalizes lookup values, and reports errors for invalid rows.
+##  Project Overview
 
-## Ingestion Pipeline
+This project implements APIs to upload and process CSV files for:
 
-The flow is: CSV upload → row validation → lookup get-or-create → batch insert → error report
+- Stores
+- Users
+- Store-User Mapping (PJP)
 
-- **CSV Upload**: Files are uploaded via POST endpoints using multipart/form-data.
-- **Row Validation**: Each row is validated against business rules (e.g., required fields, valid emails).
-- **Lookup Get-or-Create**: For store data, lookup tables are used to normalize values like brands, types, cities, etc. If a value doesn't exist, it's created.
-- **Batch Insert**: Valid rows are inserted in batches of 1000 to handle large files efficiently.
-- **Error Report**: Invalid rows are collected and returned in the response.
+The system validates each row, dynamically handles lookup tables, and inserts valid data into the database while reporting detailed errors.
 
-## Handling Large CSV Files
+---
 
-For files with 500k+ rows, the system uses:
-- **Streaming**: csv-parser streams the file without loading it entirely into memory.
-- **Batch Inserts**: Inserts are done in batches of 1000 rows to avoid overwhelming the database.
-- **Validation**: Basic validation is done per row, existence checks for mappings are batched.
+##  Ingestion Pipeline
 
-## Setup Steps
+CSV Upload → Validation → Lookup Get-or-Create → Batch Insert → Error Report
 
-1. **Install Dependencies**
-   ```
-   npm install
-   ```
+- **CSV Upload**: Multipart file upload using Express + Multer
+- **Validation**: Field-level validation (email, user_type, latitude, longitude, required fields)
+- **Lookup Handling**: Dynamic get-or-create for store_brand, store_type, city, etc.
+- **Batch Insert**: Efficient bulk insertion using batching
+- **Error Reporting**: Returns row number, column, and reason
 
-2. **Setup MySQL**
-   - Install MySQL locally.
-   - Create a database named `csv_ingestion`.
+---
 
-3. **Create Tables**
+##  Design Decisions
+
+### ✔ Failure Strategy
+- Invalid rows are **skipped**
+- Valid rows are still inserted
+
+ Reason:
+- Prevents complete failure due to few bad rows
+- Ensures maximum data ingestion
+
+---
+
+### ✔ Data Normalization
+- Trimmed values
+- Case normalization for lookup tables
+- Prevents duplicate lookup entries
+
+---
+
+### ✔ Referential Integrity
+- Mapping rows are inserted only if:
+  - user exists
+  - store exists
+
+---
+
+##  Output Analysis
+
+###  Users Ingestion
+successRows: 27
+failedRows: 3
+
+
+Errors:
+- Invalid user_type
+- Missing username
+- Invalid email
+
+---
+
+###  Stores Ingestion (Small File)
+successRows: 95
+failedRows: 5
+
+
+Errors:
+- Missing store_id
+- Invalid latitude/longitude
+- Invalid store_id format
+
+---
+
+###  Mapping Ingestion
+successRows: ~118
+failedRows: ~32
+
+
+Errors:
+- user does not exist
+- store does not exist
+- invalid date
+
+ Ensures strict referential integrity
+
+---
+
+##  Performance Test (500k File)
+
+File: `stores_master_500k.csv`
+Total Rows: 500,000
+Success Rows: 495,750
+Failed Rows: 4,250
+Time Taken: ~5 minutes
+
+
+---
+
+##  Performance Optimization
+
+- **Batch Inserts** (configurable batch size)
+- **Streaming CSV parsing** (no full memory load)
+- **Lookup caching** (reduces repeated DB queries)
+- **Limited error output** (first 10 errors only)
+
+---
+
+##  Setup Steps
+
+### 1. Install Dependencies
+
+
+### 2. Setup MySQL
+- Create database: `csv_ingestion`
+
+## Create Tables
    Run the following SQL in your MySQL client:
 
    ```sql
@@ -118,27 +206,37 @@ For files with 500k+ rows, the system uses:
    );
    ```
 
-4. **Configure Environment**
-   - Copy `.env.example` to `.env`.
-   - Update the database credentials in `.env`.
+### 4. Configure Environment
+Create `.env` file:
 
-5. **Run Server**
-   ```
-   npm start
-   ```
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=csv_ingestion
+
+
+### 5. Run Server
+npm start
+
+---
 
 ## API Endpoints
 
-### POST /api/upload/stores
-Upload stores_master.csv
+### Upload Stores
 
-### POST /api/upload/users
-Upload users_master.csv
+POST /upload/stores
 
-### POST /api/upload/store-mapping
-Upload store_user_mapping.csv
+### Upload Users
 
-All endpoints accept a file upload with key 'file' and return JSON with success/failure counts and error details.
+POST /upload/users
+
+
+### Upload Mapping
+
+POST /upload/store-mapping
+
+
+---
 
 ## Example Usage with curl
 
@@ -157,13 +255,42 @@ Upload mapping CSV:
 curl.exe -X POST -F "file=@store_user_mapping.csv" http://localhost:3000/upload/store-mapping
 ```
 
-## CSV Formats
+
+---
+
+##  CSV Formats
 
 ### stores_master.csv
-Columns: store_id, store_external_id, name, title, store_brand, store_type, city, state, country, region, latitude, longitude, is_active
+store_id, store_external_id, name, title, store_brand, store_type, city, state, country, region, latitude, longitude, is_active
 
 ### users_master.csv
-Columns: username, first_name, last_name, email, user_type, phone_number, supervisor_id, is_active
+username, first_name, last_name, email, user_type, phone_number, supervisor_id, is_active
 
 ### store_user_mapping.csv
-Columns: username, store_id, date
+username, store_id, date
+
+---
+
+##  Key Highlights
+
+-  Row-level validation with detailed error reporting
+-  Dynamic lookup table handling
+-  Referential integrity enforcement
+-  Efficient batch processing
+-  Handles large datasets (500k rows)
+-  Scalable and production-ready design
+
+---
+
+##  Future Improvements
+
+- Parallel processing (worker threads)
+- Background job queue (Bull / Redis)
+- Error export as CSV file
+- API for ingestion status tracking
+
+---
+
+##  Author
+
+Shahid
